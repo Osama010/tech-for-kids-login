@@ -201,6 +201,7 @@ function renderHome() {
       <div class="fact">${LESSONS.length} دروس متاحة دلوقتي</div>
       <p class="intro">اختار درس من الكروت اللي تحت وابدأ على طول. كل درس فيه حلقة الشرح وبطاقات مصطلحات ولعبة توصيل واختبار كبير بأفكار أسئلة مختلفة.</p>
     </div>
+    <div class="group" id="authbar"></div>
     ${progCardHTML()}
     <div class="group">
       <div class="group-label">عن المهندس</div>
