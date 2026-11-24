@@ -757,6 +757,12 @@ function renderExam(slug) {
 function route() {
   if (examTimer) { clearInterval(examTimer); examTimer = null; }
   const h = location.hash || "#/";
+  // بوابة الدخول: مفيش محتوى قبل تسجيل الدخول وموافقة المدرس
+  if (typeof fbConfigured === "function" && fbConfigured()) {
+    if (!fbUser) return renderGate();
+    if (h === "#/teacher" && typeof renderTeacher === "function") return renderTeacher();
+    if (fbStatus !== "approved") return renderPending(fbUser, fbStatus || "pending");
+  }
   if (h === "#/teacher" && typeof renderTeacher === "function") return renderTeacher();
   const me = h.match(/^#\/exam\/(\w+)/);
   if (me) return renderExam(me[1]);

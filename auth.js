@@ -26,6 +26,7 @@ function initFirebase() {
   fbAuth = firebase.auth();
   fbDb = firebase.firestore();
   fbAuth.onAuthStateChanged(async (u) => {
+    fbReady = true;
     fbUser = u;
     fbStatus = null;
     if (approvalUnsub) { approvalUnsub(); approvalUnsub = null; }
@@ -40,11 +41,95 @@ function initFirebase() {
         watchApproval(u);
       }
     } else {
-      renderAuthBar();
-      route();
+      renderGate();
     }
-    fbReady = true;
   });
+}
+
+// هل يقدر يشوف المحتوى؟
+function fbCanSeeContent() {
+  return fbUser && fbStatus === "approved";
+}
+
+// بوابة الدخول: صفحة مستقلة تمامًا قبل أي محتوى
+const gateInput = "width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(148,163,184,.35); background:rgba(15,23,42,.7); color:#e2e8f0; font-family:inherit; font-size:15px; margin-bottom:10px; box-sizing:border-box; direction:ltr; text-align:left;";
+
+function renderGate() {
+  app.innerHTML = `
+    <div class="hdr" style="text-align:center; margin-top:48px;">
+      <h1>دروس البرمجة والذكاء الاصطناعي</h1>
+      <div class="fact">مع م. اسامه حسن عسس</div>
+    </div>
+    <div class="group" style="max-width:480px; margin:24px auto;">
+      ${!fbReady ? `<p class="intro" style="text-align:center;">ثانية واحدة، بنجهز صفحة الدخول...</p>` : `
+      <p class="intro" style="text-align:center;">الموقع ده خاص بالطلاب المسجلين بس. سجّل دخولك، ولو أول مرة اعمل حساب وهيوصل طلبك للمهندس يوافق عليه الأول.</p>
+      <div class="group-label">تسجيل الدخول</div>
+      <input id="li-email" type="email" placeholder="الإيميل" style="${gateInput}">
+      <input id="li-pass" type="password" placeholder="الباسورد" style="${gateInput}">
+      <button type="button" class="btn" id="li-btn" style="width:100%; justify-content:center;">دخول</button>
+      <div class="group-label" style="margin-top:18px;">أول مرة هنا؟ اعمل حساب جديد</div>
+      <input id="rg-name" type="text" placeholder="اسمك بالكامل" style="${gateInput} direction:rtl; text-align:right;">
+      <input id="rg-email" type="email" placeholder="الإيميل" style="${gateInput}">
+      <input id="rg-pass" type="password" placeholder="اختار باسورد (6 حروف أو أكتر)" style="${gateInput}">
+      <button type="button" class="btn blue" id="rg-btn" style="width:100%; justify-content:center;">إنشاء الحساب</button>
+      <p class="progress" style="margin-top:8px;">الحساب الجديد بيستنى موافقة المهندس قبل ما تدخل الدروس.</p>
+      <p class="progress bad" id="gate-msg" style="min-height:1em;"></p>
+      <div style="text-align:center; margin-top:6px; border-top:1px solid rgba(148,163,184,.2); padding-top:14px;">
+        <button type="button" class="btn ghost small" id="gate-google">أو الدخول بحساب جوجل</button>
+      </div>`}
+    </div>
+    ${closing()}`;
+  const g = document.getElementById("gate-google");
+  if (g) g.onclick = signIn;
+  const li = document.getElementById("li-btn");
+  if (li) li.onclick = signInEmail;
+  const rg = document.getElementById("rg-btn");
+  if (rg) rg.onclick = registerEmail;
+  window.scrollTo(0, 0);
+}
+
+function gateMsg(t) {
+  const m = document.getElementById("gate-msg");
+  if (m) m.textContent = t || "";
+}
+
+function authErrAr(e) {
+  const c = (e && e.code) || "";
+  if (c.includes("user-not-found") || c.includes("wrong-password") || c.includes("invalid-credential")) return "الإيميل أو الباسورد غلط.";
+  if (c.includes("email-already-in-use")) return "الإيميل ده متسجل قبل كده، جرّب تسجيل الدخول.";
+  if (c.includes("invalid-email")) return "الإيميل مش مكتوب صح.";
+  if (c.includes("weak-password")) return "الباسورد ضعيف، خليه 6 حروف أو أرقام على الأقل.";
+  if (c.includes("too-many-requests")) return "محاولات كتير، استنى شوية وجرّب تاني.";
+  if (c.includes("network")) return "مشكلة في النت، اتأكد من الاتصال وجرّب تاني.";
+  return "حصلت مشكلة، جرّب تاني.";
+}
+
+async function signInEmail() {
+  const email = document.getElementById("li-email").value.trim();
+  const pass = document.getElementById("li-pass").value;
+  if (!email || !pass) return gateMsg("اكتب الإيميل والباسورد الأول.");
+  gateMsg("");
+  try {
+    await fbAuth.signInWithEmailAndPassword(email, pass);
+  } catch (e) {
+    gateMsg(authErrAr(e));
+  }
+}
+
+async function registerEmail() {
+  const name = document.getElementById("rg-name").value.trim();
+  const email = document.getElementById("rg-email").value.trim();
+  const pass = document.getElementById("rg-pass").value;
+  if (!name || !email || !pass) return gateMsg("اكتب اسمك والإيميل والباسورد.");
+  gateMsg("");
+  try {
+    const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+    await cred.user.updateProfile({ displayName: name });
+    // ثبّت الاسم في سجل الطالب (onAuthStateChanged ممكن يكون اتنفذ قبل updateProfile)
+    await fbDb.collection("students").doc(cred.user.uid).set({ name }, { merge: true });
+  } catch (e) {
+    gateMsg(authErrAr(e));
+  }
 }
 
 // تسجيل الطالب أول مرة كطلب مستني الموافقة، أو قراءة حالته
@@ -223,8 +308,8 @@ async function renderTeacher() {
       }
     });
     const body = rows.length
-      ? rows.map((r) => `<tr><td>${esc(r.name)}</td><td style="direction:ltr;">${esc(r.email)}</td><td>${r.points}</td><td>${r.done} / ${LESSONS.length}</td><td>${r.badges}</td><td>${r.status === "rejected" ? "مرفوض" : "مقبول"}</td></tr>`).join("")
-      : `<tr><td colspan="6">لسه مفيش طلاب سجّلوا</td></tr>`;
+      ? rows.map((r, i) => `<tr><td>${esc(r.name)}</td><td style="direction:ltr;">${esc(r.email)}</td><td>${r.points}</td><td>${r.done} / ${LESSONS.length}</td><td>${r.badges}</td><td>${r.status === "rejected" ? "مرفوض" : "مقبول"}</td><td><button type="button" class="btn ghost small" id="rs-${i}">إعادة ضبط الباسورد</button></td></tr>`).join("")
+      : `<tr><td colspan="7">لسه مفيش طلاب سجّلوا</td></tr>`;
     const pendingHTML = pending.length
       ? `<div class="group-label">طلبات مستنية موافقتك (${pending.length})</div>` +
         pending
@@ -242,9 +327,24 @@ async function renderTeacher() {
       ${pendingHTML}
       <p class="progress">عدد الطلاب المقبولين: ${rows.length}</p>
       <div style="overflow-x:auto;"><table class="ttable">
-        <thead><tr><th>الاسم</th><th>الإيميل</th><th>النقاط</th><th>الدروس المكتملة</th><th>الشارات</th><th>الحالة</th></tr></thead>
+        <thead><tr><th>الاسم</th><th>الإيميل</th><th>النقاط</th><th>الدروس المكتملة</th><th>الشارات</th><th>الحالة</th><th></th></tr></thead>
         <tbody>${body}</tbody>
-      </table></div>`;
+      </table></div>
+      <p class="progress" id="rs-msg"></p>`;
+    rows.forEach((r, i) => {
+      const rs = document.getElementById("rs-" + i);
+      if (rs) rs.onclick = async () => {
+        rs.disabled = true;
+        const m = document.getElementById("rs-msg");
+        try {
+          await fbAuth.sendPasswordResetEmail(r.email);
+          if (m) m.textContent = `اتبعت إيميل إعادة الضبط لـ ${r.email} — الطالب هيفتح اللينك اللي فيه ويختار باسورد جديد.`;
+        } catch (e) {
+          if (m) m.textContent = "فشل إرسال الإيميل: " + (e.message || e);
+          rs.disabled = false;
+        }
+      };
+    });
     pending.forEach((r) => {
       const ap = document.getElementById("ap-" + r.id);
       const rj = document.getElementById("rj-" + r.id);
