@@ -304,11 +304,11 @@ async function renderTeacher() {
       if (st === "pending") {
         pending.push({ id: d.id, name: s.name || "—", email: s.email || "—" });
       } else {
-        rows.push({ name: s.name || "—", email: s.email || "—", points: p.points || 0, done, badges: (p.badges || []).length, status: st });
+        rows.push({ id: d.id, name: s.name || "—", email: s.email || "—", points: p.points || 0, done, badges: (p.badges || []).length, status: st });
       }
     });
     const body = rows.length
-      ? rows.map((r, i) => `<tr><td>${esc(r.name)}</td><td style="direction:ltr;">${esc(r.email)}</td><td>${r.points}</td><td>${r.done} / ${LESSONS.length}</td><td>${r.badges}</td><td>${r.status === "rejected" ? "مرفوض" : "مقبول"}</td><td><button type="button" class="btn ghost small" id="rs-${i}">إعادة ضبط الباسورد</button></td></tr>`).join("")
+      ? rows.map((r, i) => `<tr><td>${esc(r.name)}</td><td style="direction:ltr;">${esc(r.email)}</td><td>${r.points}</td><td>${r.done} / ${LESSONS.length}</td><td>${r.badges}</td><td>${r.status === "rejected" ? "مرفوض" : "مقبول"}</td><td><button type="button" class="btn ghost small" id="rs-${i}">إعادة ضبط الباسورد</button> <button type="button" class="btn ghost small" id="dl-${i}" style="color:#f87171;">حذف</button></td></tr>`).join("")
       : `<tr><td colspan="7">لسه مفيش طلاب سجّلوا</td></tr>`;
     const pendingHTML = pending.length
       ? `<div class="group-label">طلبات مستنية موافقتك (${pending.length})</div>` +
@@ -332,6 +332,13 @@ async function renderTeacher() {
       </table></div>
       <p class="progress" id="rs-msg"></p>`;
     rows.forEach((r, i) => {
+      const dl = document.getElementById("dl-" + i);
+      if (dl) dl.onclick = async () => {
+        if (!confirm(`متأكد إنك عاوز تحذف ${r.name} (${r.email})؟ هيتحذف سجله وتقدمه، ولو سجل تاني هيرجع «تحت المراجعة» من الأول.`)) return;
+        dl.disabled = true;
+        await fbDb.collection("students").doc(r.id).delete();
+        renderTeacher();
+      };
       const rs = document.getElementById("rs-" + i);
       if (rs) rs.onclick = async () => {
         rs.disabled = true;
